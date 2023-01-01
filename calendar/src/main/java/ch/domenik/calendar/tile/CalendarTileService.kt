@@ -8,32 +8,29 @@ import androidx.wear.tiles.DimensionBuilders.dp
 import androidx.wear.tiles.LayoutElementBuilders.LayoutElement
 import androidx.wear.tiles.ModifiersBuilders.Modifiers
 import ch.domenik.calendar.ListItem
-import com.google.android.horologist.tiles.CoroutinesTileService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
-import retrofit2.http.Query
 
 private const val RESOURCES_VERSION = "0"
 
-class CalendarTileService : CoroutinesTileService() {
+class CalendarTileService : TileService() {
 
-    override suspend fun resourcesRequest(
-        requestParams: RequestBuilders.ResourcesRequest
-    ): ResourceBuilders.Resources {
-        return ResourceBuilders.Resources.Builder()
+    override fun onResourcesRequest(requestParams: RequestBuilders.ResourcesRequest) =
+        Futures.immediateFuture(
+            ResourceBuilders.Resources.Builder()
             .setVersion(RESOURCES_VERSION)
             .build()
-    }
+        )
 
-    override suspend fun tileRequest(
+    public override fun onTileRequest(
         requestParams: RequestBuilders.TileRequest
-    ): TileBuilders.Tile {
+    ): ListenableFuture<TileBuilders.Tile> {
         val singleTileTimeline = TimelineBuilders.Timeline.Builder()
             .addTimelineEntry(
                 TimelineBuilders.TimelineEntry.Builder()
@@ -47,10 +44,12 @@ class CalendarTileService : CoroutinesTileService() {
             )
             .build()
 
-        return TileBuilders.Tile.Builder()
+        val tile =  TileBuilders.Tile.Builder()
             .setResourcesVersion(RESOURCES_VERSION)
+            .setFreshnessIntervalMillis(1 * 1 * 1000) // 1 second
             .setTimeline(singleTileTimeline)
             .build()
+        return Futures.immediateFuture(tile)
     }
 
     data class CalendarDTO(
@@ -77,12 +76,12 @@ class CalendarTileService : CoroutinesTileService() {
     }
 
 
-    private suspend fun tileLayout(): LayoutElement {
+    private fun tileLayout(): LayoutElement {
 
-
-            val calendarDTO = CalendarApi
+            val calendarDTO = runBlocking { CalendarApi
                 .apiInstance
-                .getCalendarData()
+                .getCalendarData() }
+
             Log.d("abcdefg", calendarDTO.title)
 
 
@@ -155,14 +154,6 @@ class CalendarTileService : CoroutinesTileService() {
                     .build()
             )
             .build()
-    }
-
-    fun getRgbFromHex(hex: String): IntArray {
-        val initColor = Color.parseColor(hex)
-        val r = Color.red(initColor)
-        val g = Color.green(initColor)
-        val b = Color.blue(initColor)
-        return intArrayOf(r, g, b)
     }
 
 }
