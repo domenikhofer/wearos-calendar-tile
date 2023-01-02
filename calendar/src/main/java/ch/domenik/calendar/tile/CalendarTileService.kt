@@ -1,7 +1,6 @@
 package ch.domenik.calendar.tile
 
 import android.graphics.Color
-import android.util.Log
 import androidx.wear.tiles.*
 import androidx.wear.tiles.ColorBuilders.argb
 import androidx.wear.tiles.DimensionBuilders.dp
@@ -13,6 +12,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
@@ -24,8 +24,8 @@ class CalendarTileService : TileService() {
     override fun onResourcesRequest(requestParams: RequestBuilders.ResourcesRequest) =
         Futures.immediateFuture(
             ResourceBuilders.Resources.Builder()
-            .setVersion(RESOURCES_VERSION)
-            .build()
+                .setVersion(RESOURCES_VERSION)
+                .build()
         )
 
     public override fun onTileRequest(
@@ -44,7 +44,7 @@ class CalendarTileService : TileService() {
             )
             .build()
 
-        val tile =  TileBuilders.Tile.Builder()
+        val tile = TileBuilders.Tile.Builder()
             .setResourcesVersion(RESOURCES_VERSION)
             .setFreshnessIntervalMillis(1 * 1 * 1000) // 1 second
             .setTimeline(singleTileTimeline)
@@ -52,93 +52,124 @@ class CalendarTileService : TileService() {
         return Futures.immediateFuture(tile)
     }
 
-    data class CalendarDTO(
-        val id: String,
-        val title: String,
+    data class CalendarDays(
+        val days: List<DayEntries>?
     )
+
+    data class DayEntries(
+        val entries: List<Entry>?
+    )
+
+    data class Entry(
+        val date: String?,
+        val event: String,
+        val type: String?
+    )
+
 
     interface CalendarApi {
 
         companion object {
-            const val BASE_URL = "https://jsonplaceholder.typicode.com/"
+            const val BASE_URL = "https://domenik.ch/"
 
 
             val apiInstance = Retrofit.Builder()
                 .baseUrl(BASE_URL)
-                .client(OkHttpClient.Builder().addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)).build())
+                .client(
+                    OkHttpClient.Builder()
+                        .addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC))
+                        .build()
+                )
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
                 .create(CalendarApi::class.java)
         }
 
-        @GET("/todos/1")
-        suspend fun getCalendarData(): CalendarDTO
+        @GET("/googleCalendar")
+        suspend fun getCalendarData(): Response<CalendarDays>
     }
 
 
     private fun tileLayout(): LayoutElement {
 
-            val calendarDTO = runBlocking { CalendarApi
+        val calendarDTO = runBlocking {
+            CalendarApi
                 .apiInstance
-                .getCalendarData() }
-
-            Log.d("abcdefg", calendarDTO.title)
-
-
+                .getCalendarData()
+        }
         val listItems: ArrayList<ListItem> = ArrayList()
-        listItems.add(ListItem("Sun, 6 Nov", "Anniversary Jeanpieree", "light"))
-        listItems.add(ListItem("Mon, 7 Nov", "Fränzi 🎂", "dark"))
-        listItems.add(ListItem("Mon, 8 Nov", "Marilen 🎂", "dark"))
-        listItems.add(ListItem( "Thu, 10 Nov", "ERZ Abfuhr: Papier\n6:30 at Friesstrasse 22", "light"))
-        listItems.add(ListItem("Sun, 6 Nov", "Anniversary Jeanpiere", "light"))
-        listItems.add(ListItem("Mon, 7 Nov", "Fränzi 🎂", "dark"))
-        listItems.add(ListItem("Mon, 8 Nov", "Marilen 🎂", "dark"))
-        listItems.add(ListItem( "Thu, 10 Nov", "ERZ Abfuhr: Papier\n6:30 at Friesstrasse 22", "light"))
+
+
+        val days = calendarDTO.body()?.days
+
+
+        if (days != null) {
+            for (i in 0 until days.count()) {
+                val entries = days[i].entries
+                if (entries != null) {
+                    for (j in 0 until entries.count()) {
+                        listItems.add(ListItem(entries[j].date, entries[j].event, entries[j].type))
+                    }
+
+                }
+            }
+
+        }
+
+
+
 
         return LayoutElementBuilders.Column.Builder()
             .setWidth(DimensionBuilders.expand())
             .setHeight(DimensionBuilders.expand())
             .apply {
-                listItems.take(5).forEach { listItem ->
+                listItems.forEach { listItem ->
                     addContent(
-                    LayoutElementBuilders.Column.Builder()
-                        .addContent(
-                            LayoutElementBuilders.Text.Builder()
-                                .setText(listItem.date)
-                                .setFontStyle(LayoutElementBuilders.FontStyle.Builder()
-                                    .setColor(argb(Color.parseColor("#000000")))
-                                    .setSize(DimensionBuilders.sp(12f))
-                                    .build())
-                                .build()
-                        ).build()
-                )
-                    .addContent(
                         LayoutElementBuilders.Column.Builder()
                             .addContent(
                                 LayoutElementBuilders.Text.Builder()
-                                    .setText(listItem.text)
-                                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder()
-                                        .setSize(DimensionBuilders.sp(12f))
-                                        .build())
-                                    .build()
-                            ).setModifiers(
-                                Modifiers.Builder()
-                                    .setBackground(
-                                        ModifiersBuilders.Background.Builder()
-                                            .setColor(argb(Color.parseColor(if (listItem.type == "light") "#4CAF50" else "#009688"))).build()
+                                    .setText(listItem.date)
+                                    .setFontStyle(
+                                        LayoutElementBuilders.FontStyle.Builder()
+                                            .setColor(argb(Color.parseColor("#000000")))
+                                            .setSize(DimensionBuilders.sp(12f))
+                                            .build()
                                     )
                                     .build()
-                            ).setWidth(DimensionBuilders.expand())
-
-                            .build()
-
+                            ).build()
                     )
+                        .addContent(
+                            LayoutElementBuilders.Column.Builder()
+                                .addContent(
+                                    LayoutElementBuilders.Text.Builder()
+                                        .setText(listItem.text)
+                                        .setFontStyle(
+                                            LayoutElementBuilders.FontStyle.Builder()
+                                                .setSize(DimensionBuilders.sp(12f))
+                                                .build()
+                                        )
+                                        .build()
+                                ).setModifiers(
+                                    Modifiers.Builder()
+                                        .setBackground(
+                                            ModifiersBuilders.Background.Builder()
+                                                .setColor(argb(Color.parseColor(if (listItem.type == "light") "#4CAF50" else "#009688")))
+                                                .build()
+                                        )
+                                        .build()
+                                ).setWidth(DimensionBuilders.expand())
+
+                                .build()
+
+                        )
                         .addContent(
                             LayoutElementBuilders.Text.Builder()
                                 .setText(" ")
-                                .setFontStyle(LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(DimensionBuilders.sp(6f))
-                                    .build())
+                                .setFontStyle(
+                                    LayoutElementBuilders.FontStyle.Builder()
+                                        .setSize(DimensionBuilders.sp(6f))
+                                        .build()
+                                )
                                 .build()
                         )
                 }
